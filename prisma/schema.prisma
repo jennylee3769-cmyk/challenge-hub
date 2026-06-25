@@ -1,0 +1,466 @@
+// Prisma Schema — 챌린지 플랫폼 MVP
+// PRD v2.1 §9 데이터 모델 기반
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── 사용자 ───────────────────────────────────────────────
+model User {
+  id                  String    @id @default(cuid())
+  socialProvider      String    // "kakao" | "google"
+  socialId            String
+  nickname            String
+  profileImageUrl     String?
+  email               String?
+  phoneEncrypted      String?
+  ciEncrypted         String?
+  birthDate           DateTime?
+  identityVerifiedAt  DateTime?
+  role                UserRole  @default(USER)
+
+  // 상금 수령 계좌 (토스 지급대행 셀러)
+  payoutSellerId      String?
+  payoutBankCode      String?
+  payoutAccount       String?   // 암호화 저장
+  payoutHolderName    String?
+  payoutRegisteredAt  DateTime?
+
+  createdAt           DateTime  @default(now())
+  deletedAt           DateTime?
+
+  // Relations
+  managedChallenges   Challenge[]        @relation("Manager")
+  participations      Participation[]
+  certifications      Certification[]
+  certLikes           CertificationLike[]
+  certComments        CertificationComment[]
+  certReports         CertificationReport[]
+  disputes            Dispute[]
+  payments            Payment[]
+  subscription        ManagerSubscription?
+  boostings           ChallengeBoosting[]
+  refreshTokens       RefreshToken[]
+
+  @@unique([socialProvider, socialId])
+  @@index([email])
+  @@map("users")
+}
+
+enum UserRole {
+  USER
+  MANAGER
+  ADMIN
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
+}
+
+// ─── 챌린지 ───────────────────────────────────────────────
+model Challenge {
+  id                String          @id @default(cuid())
+  managerId         String
+  title             String
+  description       String          @db.Text
+  coverImageUrl     String?
+  channelType       ChannelType
+  category          ChallengeCategory
+  hashtags          String[]
+  status            ChallengeStatus @default(DRAFT)
+
+  startsAt          DateTime
+  endsAt            DateTime
+  recruitEndsAt     DateTime
+
+  certFrequency     CertFrequency
+  certFrequencyN    Int?            // weekly_n, total_n 선택 시
+  certDailyDeadline String          @default("23:59") // HH:MM KST
+  certSuccessPct    Int             // 50~100
+
+  entryFee          Int             @default(0)
+  managerFeePct     Int             @default(0)
+  rewardModel       RewardModel     @default(EQUAL)
+  rewardRankConfig  Json?           // [{rank:1, pct:50}, ...]
+
+  reviewMode        ReviewMode      @default(AUTO_WITH_EXCEPTION)
+  requiredHashtags  String[]
+  isPublic          Boolean         @default(true)
+  inviteCode        String?         @unique
+
+  minParticipants   Int?
+  maxParticipants   Int?
+  disputePeriodDays Int             @default(5)
+
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  // Relations
+  manager           User            @relation("Manager", fields: [managerId], references: [id])
+  participations    Participation[]
+  certifications    Certification[]
+  disputes          Dispute[]
+  payments          Payment[]
+  settlements       Settlement[]
+  boostings         ChallengeBoosting[]
+
+  @@index([status])
+  @@index([managerId])
+  @@index([startsAt])
+  @@map("challenges")
+}
+
+enum ChannelType {
+  BLOG
+  YOUTUBE
+  FREE
+}
+
+enum ChallengeCategory {
+  EXERCISE
+  STUDY
+  READING
+  FINANCE
+  DIET
+  CREATION
+  PRODUCTIVITY
+  OTHER
+}
+
+enum ChallengeStatus {
+  DRAFT
+  RECRUITING
+  IN_PROGRESS
+  REVIEWING
+  COMPLETED
+  CANCELLED
+}
+
+enum CertFrequency {
+  DAILY
+  WEEKLY_N
+  TOTAL_N
+}
+
+enum RewardModel {
+  EQUAL
+  PROPORTIONAL
+  COMPLETION_BONUS
+  RANK
+  REFUND
+}
+
+enum ReviewMode {
+  MANUAL
+  AUTO_WITH_EXCEPTION
+}
+
+// ─── 참가 ─────────────────────────────────────────────────
+model Participation {
+  id              String              @id @default(cuid())
+  challengeId     String
+  userId          String
+  status          ParticipationStatus @default(ACTIVE)
+  paymentId       String?             @unique
+
+  certCount       Int                 @default(0)
+  maxStreak       Int                 @default(0)
+  likedReceived   Int                 @default(0)
+  earlyCertCount  Int                 @default(0)
+  score           Int                 @default(0)
+
+  joinedAt        DateTime            @default(now())
+  withdrawnAt     DateTime?
+
+  // Relations
+  challenge       Challenge           @relation(fields: [challengeId], references: [id])
+  user            User                @relation(fields: [userId], references: [id])
+  payment         Payment?            @relation(fields: [paymentId], references: [id])
+  settlement      Settlement?
+  certifications  Certification[]
+
+  @@unique([challengeId, userId])
+  @@map("participations")
+}
+
+enum ParticipationStatus {
+  ACTIVE
+  SUCCESS
+  FAILED
+  WITHDRAWN
+}
+
+// ─── 인증 ─────────────────────────────────────────────────
+model Certification {
+  id                String              @id @default(cuid())
+  participationId   String
+  challengeId       String
+  userId            String
+  submitType        SubmitType
+  url               String?
+  photoUrls         String[]
+  ogSnapshot        Json?               // {title, imageUrl, publishedAt, description}
+  contentDate       DateTime?
+  submittedAt       DateTime            @default(now())
+  status            CertStatus          @default(PENDING)
+  rejectCode        String?
+  rejectMemo        String?
+  reviewedAt        DateTime?
+  reviewedBy        String?
+  phash             String?             // perceptual hash
+
+  // Relations
+  participation     Participation       @relation(fields: [participationId], references: [id])
+  challenge         Challenge           @relation(fields: [challengeId], references: [id])
+  user              User                @relation(fields: [userId], references: [id])
+  likes             CertificationLike[]
+  comments          CertificationComment[]
+  reports           CertificationReport[]
+  disputes          Dispute[]
+
+  @@index([challengeId, status])
+  @@index([participationId])
+  @@index([submittedAt])
+  @@map("certifications")
+}
+
+enum SubmitType {
+  LINK
+  PHOTO
+  MIXED
+}
+
+enum CertStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model CertificationLike {
+  id                String        @id @default(cuid())
+  certificationId   String
+  userId            String
+  createdAt         DateTime      @default(now())
+
+  certification     Certification @relation(fields: [certificationId], references: [id], onDelete: Cascade)
+  user              User          @relation(fields: [userId], references: [id])
+
+  @@unique([certificationId, userId])
+  @@map("certification_likes")
+}
+
+model CertificationComment {
+  id                String        @id @default(cuid())
+  certificationId   String
+  userId            String
+  content           String
+  isDeleted         Boolean       @default(false)
+  createdAt         DateTime      @default(now())
+
+  certification     Certification @relation(fields: [certificationId], references: [id], onDelete: Cascade)
+  user              User          @relation(fields: [userId], references: [id])
+
+  @@map("certification_comments")
+}
+
+model CertificationReport {
+  id                String        @id @default(cuid())
+  certificationId   String
+  reporterId        String
+  reason            ReportReason
+  memo              String?
+  status            ReportStatus  @default(PENDING)
+  createdAt         DateTime      @default(now())
+
+  certification     Certification @relation(fields: [certificationId], references: [id])
+  reporter          User          @relation(fields: [reporterId], references: [id])
+
+  @@unique([certificationId, reporterId])
+  @@map("certification_reports")
+}
+
+enum ReportReason {
+  FAKE_CERT
+  INAPPROPRIATE
+  COPYRIGHT
+  OTHER
+}
+
+enum ReportStatus {
+  PENDING
+  REVIEWED
+  DISMISSED
+}
+
+// ─── 결제 & 정산 ──────────────────────────────────────────
+model Payment {
+  id              String        @id @default(cuid())
+  userId          String
+  challengeId     String
+  amount          Int
+  pgProvider      String        @default("toss")
+  pgPaymentKey    String?
+  pgOrderId       String        @unique
+  status          PaymentStatus @default(PENDING)
+  refundReason    String?
+  createdAt       DateTime      @default(now())
+  completedAt     DateTime?
+  refundedAt      DateTime?
+
+  user            User          @relation(fields: [userId], references: [id])
+  challenge       Challenge     @relation(fields: [challengeId], references: [id])
+  participation   Participation?
+
+  @@index([userId])
+  @@index([challengeId])
+  @@map("payments")
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  REFUNDED
+  FAILED
+}
+
+model Settlement {
+  id                String            @id @default(cuid())
+  challengeId       String
+  participationId   String            @unique
+  grossAmount       Int
+  taxAmount         Int               @default(0)
+  netAmount         Int
+  payoutRequestId   String?
+  status            SettlementStatus  @default(PENDING)
+  failReason        String?
+  createdAt         DateTime          @default(now())
+  paidAt            DateTime?
+
+  challenge         Challenge         @relation(fields: [challengeId], references: [id])
+  participation     Participation     @relation(fields: [participationId], references: [id])
+
+  @@map("settlements")
+}
+
+enum SettlementStatus {
+  PENDING
+  PROCESSING
+  PAID
+  FAILED
+}
+
+// ─── 이의신청 ─────────────────────────────────────────────
+model Dispute {
+  id                String        @id @default(cuid())
+  certificationId   String?
+  challengeId       String
+  userId            String
+  reasonCode        String
+  comment           String        @db.Text
+  attachmentUrls    String[]
+  status            DisputeStatus @default(OPEN)
+  resolvedBy        String?
+  resolvedMemo      String?
+  createdAt         DateTime      @default(now())
+  resolvedAt        DateTime?
+
+  certification     Certification? @relation(fields: [certificationId], references: [id])
+  challenge         Challenge      @relation(fields: [challengeId], references: [id])
+  user              User           @relation(fields: [userId], references: [id])
+
+  @@map("disputes")
+}
+
+enum DisputeStatus {
+  OPEN
+  APPROVED
+  REJECTED
+  ESCALATED
+}
+
+// ─── 구독 & 부스팅 ────────────────────────────────────────
+model ManagerSubscription {
+  id                    String          @id @default(cuid())
+  userId                String          @unique
+  plan                  SubscriptionPlan @default(FREE)
+  pgBillingKey          String?
+  amount                Int             @default(0)
+  status                SubStatus       @default(ACTIVE)
+  currentPeriodStart    DateTime?
+  currentPeriodEnd      DateTime?
+  cancelAt              DateTime?
+  createdAt             DateTime        @default(now())
+
+  user                  User            @relation(fields: [userId], references: [id])
+
+  @@map("manager_subscriptions")
+}
+
+enum SubscriptionPlan {
+  FREE
+  STANDARD
+  PRO
+}
+
+enum SubStatus {
+  ACTIVE
+  CANCELLED
+  EXPIRED
+}
+
+model ChallengeBoosting {
+  id            String          @id @default(cuid())
+  challengeId   String
+  managerId     String
+  plan          BoostingPlan
+  amount        Int
+  pgPaymentKey  String?
+  startsAt      DateTime?
+  endsAt        DateTime?
+  status        BoostingStatus  @default(PENDING)
+  createdAt     DateTime        @default(now())
+
+  challenge     Challenge       @relation(fields: [challengeId], references: [id])
+  manager       User            @relation(fields: [managerId], references: [id])
+
+  @@map("challenge_boostings")
+}
+
+enum BoostingPlan {
+  S
+  M
+  L
+}
+
+enum BoostingStatus {
+  PENDING
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+// ─── 알림 로그 ────────────────────────────────────────────
+model NotificationLog {
+  id          String   @id @default(cuid())
+  userId      String
+  type        String
+  channel     String   // "email" | "push"
+  recipient   String
+  status      String   // "sent" | "failed"
+  sentAt      DateTime @default(now())
+
+  @@index([userId])
+  @@map("notification_logs")
+}
