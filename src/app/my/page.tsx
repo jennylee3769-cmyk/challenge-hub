@@ -3,7 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import {
   Trophy, Calendar, ChevronRight, Settings,
-  CreditCard, Bell, Shield, LogOut, Star
+  CreditCard, Bell, Shield, LogOut, Star, Pencil
 } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { BottomNav } from "@/components/layout/BottomNav";
@@ -13,6 +13,7 @@ import { db } from "@/lib/db";
 import { formatDate } from "@/lib/utils";
 import { SUBSCRIPTION_LABELS } from "@/types";
 import { LogoutButton } from "@/components/shared/LogoutButton";
+import { ProfileEditModal } from "@/components/my/ProfileEditModal";
 
 export default async function MyPage() {
   const user = await getCurrentUser();
@@ -74,9 +75,15 @@ export default async function MyPage() {
                 {user.role === "MANAGER" ? "챌린지 매니저" : "챌린저"}
               </p>
             </div>
-            <Link href="/settings" className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
-              <Settings className="h-5 w-5" />
-            </Link>
+            <div className="flex gap-2">
+              <ProfileEditModal
+                currentNickname={user.nickname}
+                currentImageUrl={user.profileImageUrl ?? undefined}
+              />
+              <Link href="/settings" className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
+                <Settings className="h-5 w-5" />
+              </Link>
+            </div>
           </div>
 
           {/* 통계 */}
