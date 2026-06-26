@@ -2,21 +2,22 @@ import { redirect } from "next/navigation";
 import { CheckCircle, Star, Zap, Crown } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { getCurrentUser } from "@/lib/auth";
-import { Button } from "@/components/ui/button";
 import { formatDate } from "@/lib/utils";
+import { SubscriptionUpgradeButton } from "@/components/subscription/SubscriptionUpgradeButton";
+import { Button } from "@/components/ui/button";
 
 const PLANS = [
   {
     key: "FREE",
     name: "Free",
-    icon: <Star className="h-6 w-6 text-[#98A2B3]" />,
+    iconName: "star",
     price: 0,
     features: ["챌린지 1개", "참가자 최대 30명", "기본 인증 관리", "플랫폼 수수료 7%"],
   },
   {
     key: "STARTER",
     name: "Starter",
-    icon: <Zap className="h-6 w-6 text-[#6172F3]" />,
+    iconName: "zap",
     price: 9900,
     features: ["챌린지 5개", "참가자 최대 100명", "우선 노출", "플랫폼 수수료 5%", "상세 통계"],
     recommended: true,
@@ -24,7 +25,7 @@ const PLANS = [
   {
     key: "PRO",
     name: "Pro",
-    icon: <Crown className="h-6 w-6 text-[#F79009]" />,
+    iconName: "crown",
     price: 29900,
     features: ["챌린지 무제한", "참가자 무제한", "상단 고정 노출", "플랫폼 수수료 3%", "전용 CS 지원", "자동 정산"],
   },
@@ -56,6 +57,8 @@ export default async function SubscriptionPage() {
         <div className="space-y-3">
           {PLANS.map((plan) => {
             const isCurrentPlan = plan.key === currentPlan;
+            const Icon = plan.iconName === "zap" ? Zap : plan.iconName === "crown" ? Crown : Star;
+            const iconColor = plan.iconName === "zap" ? "text-[#6172F3]" : plan.iconName === "crown" ? "text-[#F79009]" : "text-[#98A2B3]";
             return (
               <div
                 key={plan.key}
@@ -73,7 +76,7 @@ export default async function SubscriptionPage() {
                   </span>
                 )}
                 <div className="flex items-center gap-3 mb-3">
-                  {plan.icon}
+                  <Icon className={`h-6 w-6 ${iconColor}`} />
                   <div>
                     <p className="font-bold text-[#101828]">{plan.name}</p>
                     <p className="text-sm text-[#667085]">
@@ -90,17 +93,15 @@ export default async function SubscriptionPage() {
                   ))}
                 </ul>
                 {isCurrentPlan ? (
-                  <Button variant="secondary" size="full" disabled>
-                    현재 플랜
-                  </Button>
+                  <Button variant="secondary" size="full" disabled>현재 플랜</Button>
+                ) : plan.price === 0 ? (
+                  <SubscriptionUpgradeButton plan="FREE" label="다운그레이드 (해지)" variant="secondary" />
                 ) : (
-                  <Button
-                    size="full"
+                  <SubscriptionUpgradeButton
+                    plan={plan.key as "STARTER" | "PRO"}
+                    label="업그레이드"
                     variant={plan.recommended ? "primary" : "secondary"}
-                    onClick={() => {/* TODO: 업그레이드 결제 */}}
-                  >
-                    {plan.price === 0 ? "다운그레이드" : "업그레이드"}
-                  </Button>
+                  />
                 )}
               </div>
             );

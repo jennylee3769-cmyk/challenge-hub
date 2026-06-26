@@ -156,7 +156,7 @@ export default async function MyPage() {
           {[
             { href: "/my/account", icon: CreditCard, label: "상금 수령 계좌 관리" },
             { href: "/my/calendar", icon: Calendar, label: "인증 캘린더" },
-            { href: "/notifications/settings", icon: Bell, label: "알림 설정" },
+            { href: "/settings/notifications", icon: Bell, label: "알림 설정" },
             { href: "/my/identity", icon: Shield, label: "본인 인증" },
             ...(user.role === "MANAGER" || user.role === "ADMIN"
               ? [{ href: "/subscription", icon: Star, label: "구독 플랜 관리" }]
